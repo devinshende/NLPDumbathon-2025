@@ -249,28 +249,73 @@
 
             let rawInputText = localStorage.getItem('animationText') || "No text provided from index.html. Enter text in the previous step to see content here.";
 
-            // --- 2. Transformation Logic (Placeholder Function) ---
-            const contentTransforms = {
-                corporate: (text) => text
-                    .replace(/problem/gi, 'challenge')
-                    .replace(/solution/gi, 'synergistic outcome')
-                    .replace(/goal/gi, 'key deliverable')
-                    .replace(/work on/gi, 'operationalize')
-                    .replace(/plan/gi, 'strategic roadmap'),
-                emoji: (text) => text
-                    .replace(/[.!?]/g, ' ✨ ')
-                    .replace(/ /g, ' 💅 ') + ' 👑',
-                argumentative: (text) => "It is logically indefensible to assume: " + text.toUpperCase() + ". Furthermore, the premise is fundamentally flawed.",
-                forgetful: (text) => text
-                    .replace(/the /g, ' that one... ')
-                    .replace(/is /g, ' wait, is it? ')
-                    .replace(/and/g, ' or was it... and? '),
-                brainrot: (text) => text
-                    .replace(/good/g, 'bussin\'')
-                    .replace(/winning/g, 'slaying') + ' no cap fr.'
-            };
+            // --- 2. API Integration with FastAPI Backend ---
+            const API_URL = 'http://localhost:8000/transform';
+            
+            /**
+             * Calls the FastAPI backend which uses model.py to transform text with Gemini AI
+             * @param {string} text - The text to transform
+             * @param {string} mode - The transformation mode
+             * @returns {Promise<string>} - The transformed text
+             */
+            async function transformTextWithAPI(text, mode) {
+                try {
+                    console.log(`Calling API with mode: ${mode}`);
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            text: text,
+                            mode: mode
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('API transformation successful');
+                        return data.transformed_text;
+                    } else {
+                        console.error('API Error:', data.error);
+                        // Fallback to basic transformation
+                        return fallbackTransform(text, mode);
+                    }
+                } catch (error) {
+                    console.error('Network Error - API server may not be running:', error);
+                    console.log('Using fallback transformation');
+                    // Fallback to basic transformations if API is unavailable
+                    return fallbackTransform(text, mode);
+                }
+            }
 
-            // --- 3. GSAP Character Movement ---
+            // --- 3. Fallback Transformation Logic (if API fails) ---
+            function fallbackTransform(text, mode) {
+                const contentTransforms = {
+                    corporate: (text) => text
+                        .replace(/problem/gi, 'challenge')
+                        .replace(/solution/gi, 'synergistic outcome')
+                        .replace(/goal/gi, 'key deliverable')
+                        .replace(/work on/gi, 'operationalize')
+                        .replace(/plan/gi, 'strategic roadmap'),
+                    emoji: (text) => text
+                        .replace(/[.!?]/g, ' ✨ ')
+                        .replace(/ /g, ' 💅 ') + ' 👑',
+                    argumentative: (text) => "It is logically indefensible to assume: " + text.toUpperCase() + ". Furthermore, the premise is fundamentally flawed.",
+                    forgetful: (text) => text
+                        .replace(/the /g, ' that one... ')
+                        .replace(/is /g, ' wait, is it? ')
+                        .replace(/and/g, ' or was it... and? '),
+                    brainrot: (text) => text
+                        .replace(/good/g, 'bussin\'')
+                        .replace(/winning/g, 'slaying') + ' no cap fr.'
+                };
+                
+                return contentTransforms[mode] ? contentTransforms[mode](text) : text;
+            }
+
+            // --- 4. GSAP Character Movement ---
 
             /**
              * Starts a continuous, random movement loop for a single character.
@@ -495,10 +540,11 @@
                 // Stop collision checks during content transition
                 if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
-                // Apply the selected transformation
-                const transformedText = contentTransforms[mode]
-                    ? contentTransforms[mode](rawInputText)
-                    : rawInputText;
+                // Show loading state
+                outputArea.innerHTML = '<p class="text-gray-400 italic animate-pulse">🤖 AI is Improving your text...</p>';
+
+                // Call the API to transform text using model.py
+                const transformedText = await transformTextWithAPI(rawInputText, mode);
 
                 // Use the new ParseInput function to prepare the HTML
                 const newContentHTML = ParseInput(transformedText);
