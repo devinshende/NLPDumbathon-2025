@@ -34,8 +34,6 @@
             width: 90%;
             /* Relative position needed for absolute children (character layer) */
             position: relative;
-            cursor: none;
-            /* hide native cursor inside the document area so custom cursor can be shown */
         }
 
         /* Layer for the animated characters, positioned over the content */
@@ -50,6 +48,8 @@
             z-index: 10;
         }
 
+
+
         .character {
             width: 48px;
             height: 48px;
@@ -60,17 +60,16 @@
             box-shadow: 0 6px 14px rgba(16, 24, 40, 0.12);
         }
 
-        /* Visual for the inverted cursor (slightly different appearance) */
-        .inverted-cursor {
-            mix-blend-mode: normal;
-            border: 2px solid rgba(255, 255, 255, 0.06);
-            opacity: 0.85;
-            transform: translateZ(0);
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background-color: #111827;
-            /* keep the black dot look */
+        /* Make the moneyjeff sprite larger without affecting other characters */
+        #char-5 {
+            width: 72px;
+            height: 72px;
+        }
+
+        /* Make the UCSC jeff sprite twice the base character size */
+        #char-3 {
+            width: 96px;
+            height: 140px;
         }
     </style>
 </head>
@@ -117,12 +116,18 @@
 
         <!-- Character Animation Layer -->
         <div id="character-layer">
-            <div id="char-1" class="character" style="background-color: #f87171;"></div>
+            <div id="char-1" class="character" style="background-color: #a21f1f;"></div>
             <div id="char-2" class="character" style="background-color: #60a5fa;"></div>
-            <div id="char-3" class="character" style="background-color: #4ade80;"></div>
-            <div id="char-4" class="character" style="background-color: #fbbf24;"></div>
-            <div id="char-5" class="character" style="background-color: #a78bfa;"></div>
-            <div id="char-6" class="character" style="background-color: #fb7185;"></div>
+            <!-- char-3 uses an image sprite from assets/ucscjeff.png -->
+            <div id="char-3" class="character"
+                style="background-image: url('assets/ucscjeff.png'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+            </div>
+            <div id="char-4" class="character" style="background-color: #46a60f;"></div>
+            <!-- char-5 uses an image sprite from assets/moneyjeff.png -->
+            <div id="char-5" class="character"
+                style="background-image: url('assets/moneyjeff.png'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+            </div>
+            <div id="char-6" class="character" style="background-color: #b393d9;"></div>
             <div id="char-7" class="character" style="background-color: #34d399;"></div>
         </div>
 
@@ -162,19 +167,7 @@
             const outputArea = document.getElementById('output-area');
             const modeSelect = document.getElementById('style-mode');
             const characterLayer = document.getElementById('character-layer');
-            let characters = document.querySelectorAll('.character');
-
-            // Create an inverted cursor element that will mirror mouse movement inversely
-            const invertedCursor = document.createElement('div');
-            invertedCursor.id = 'inverted-cursor';
-            invertedCursor.className = 'character inverted-cursor';
-            invertedCursor.style.backgroundColor = '#111827';
-            invertedCursor.style.width = '';
-            invertedCursor.style.height = '';
-            characterLayer.appendChild(invertedCursor);
-
-            // Re-query characters so the inverted cursor is included for collisions
-            characters = document.querySelectorAll('.character');
+            const characters = document.querySelectorAll('.character');
 
             let animationFrameId = null;
             let currentParagraphs = [];
@@ -245,45 +238,9 @@
                 move();
             }
 
-            // --- Inverted cursor handling ---
-            // Pointer movement over the document card is mapped inversely onto the inverted cursor.
-            (function setupInvertedCursor() {
-                const cursor = document.getElementById('inverted-cursor');
-                if (!cursor) return;
 
-                // Place cursor initially in the center
-                function centerCursor() {
-                    const layerRect = characterLayer.getBoundingClientRect();
-                    const cx = (layerRect.width - cursor.clientWidth) / 2;
-                    const cy = (layerRect.height - cursor.clientHeight) / 2;
-                    gsap.set(cursor, { x: cx, y: cy });
-                }
 
-                // Update on pointer move and invert coordinates
-                documentCard.addEventListener('pointermove', (e) => {
-                    const layerRect = characterLayer.getBoundingClientRect();
 
-                    // Mouse position relative to the layer
-                    const localX = e.clientX - layerRect.left;
-                    const localY = e.clientY - layerRect.top;
-
-                    // Inverted position
-                    const invX = Math.max(0, layerRect.width - localX - (cursor.clientWidth / 2));
-                    const invY = Math.max(0, layerRect.height - localY - (cursor.clientHeight / 2));
-
-                    // Smoothly move the inverted cursor
-                    gsap.to(cursor, { x: invX, y: invY, duration: 0.06, ease: 'power2.out' });
-                });
-
-                // When the pointer leaves the document card, return cursor to center
-                documentCard.addEventListener('pointerleave', () => {
-                    centerCursor();
-                });
-
-                // Ensure it's centered on load/resize
-                window.addEventListener('resize', centerCursor);
-                centerCursor();
-            })();
 
             // --- 4. Collision Detection ---
 
@@ -411,11 +368,8 @@
                 // Initial Page Animation (Title fade-in)
                 gsap.from(title, { opacity: 0, y: -20, duration: 1, ease: "power2.out" });
 
-                // Start character animations for all characters except the inverted cursor
-                characters.forEach(c => {
-                    if (c.id === 'inverted-cursor') return; // inverted cursor is controlled by pointer
-                    animateCharacter(c);
-                });
+                // Start character animations
+                characters.forEach(animateCharacter);
             }
 
             // --- 7. Event Listener ---
