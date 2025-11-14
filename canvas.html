@@ -68,6 +68,36 @@
             will-change: transform, filter;
         }
 
+        /* Redacted text styling - black highlight effect */
+        .redacted {
+            background-color: #000000 !important;
+            color: transparent !important;
+            text-shadow: none !important;
+            user-select: none;
+            border-radius: 3px;
+            position: relative;
+            padding: 2px 4px;
+            margin: 0 1px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Ensure redacted text can't be selected or revealed */
+        .redacted::selection {
+            background-color: #000000;
+            color: transparent;
+        }
+
+        @keyframes redact-in {
+            from {
+                background-color: transparent;
+                transform: scaleX(0);
+            }
+            to {
+                background-color: #000000;
+                transform: scaleX(1);
+            }
+        }
+
         /* Kristina sprite sizing */
         #char-5 {
             width: 100px;
@@ -149,6 +179,7 @@
                 <option value="brainrot">🤪 Brainrot / Slang</option>
             </select>
         </div>
+
 
         <!-- Output Area for Generated Text -->
         <div id="output-area" class="space-y-6 text-lg text-gray-700 leading-relaxed min-h-[400px]">
@@ -251,6 +282,15 @@
 
             // --- 2. API Integration with FastAPI Backend ---
             const API_URL = 'http://localhost:8000/transform';
+            const KEYPHRASE_API_URL = 'http://localhost:8001/extract';
+            
+            // Store keyphrases and redaction state
+            let keyphraseIndices = [];
+            let redactedCount = 0;
+            let redactionEnabled = false;
+            let originalTransformedText = ''; // Store the original transformed text
+            let lastRedactionTime = 0; // Cooldown timer for progressive redaction
+            const REDACTION_COOLDOWN = 1000; // Minimum milliseconds between redactions
             
             /**
              * Calls the FastAPI backend which uses model.py to transform text with Gemini AI
@@ -288,6 +328,118 @@
                     // Fallback to basic transformations if API is unavailable
                     return fallbackTransform(text, mode);
                 }
+            }
+
+            /**
+             * Fetches keyphrases from the keyphrase extraction API
+             * @param {string} text - The text to analyze
+             * @returns {Promise<Array>} - Array of [start, end] indices
+             */
+            async function fetchKeyphrases(text) {
+                try {
+                    console.log('Fetching keyphrases from API...');
+                    const response = await fetch(KEYPHRASE_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            text: text,
+                            p: 0.3  // Extract 30% of keyphrases for progressive redaction
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    console.log(`Received ${data.keyphrases.length} keyphrases`);
+                    return data.keyphrases;
+                } catch (error) {
+                    console.error('Failed to fetch keyphrases:', error);
+                    return [];
+                }
+            }
+
+            /**
+             * Finds and marks text nodes that fall within keyphrase indices
+             * @param {Array} indices - Array of [start, end] pairs to redact
+             */
+            function applyRedactionToDOM(indices) {
+                if (!indices || indices.length === 0) return;
+                
+                // Get all text content to build character position map
+                const allText = originalTransformedText;
+                let charPosition = 0;
+                
+                // Walk through all paragraph elements
+                const paragraphs = outputArea.querySelectorAll('p');
+                
+                paragraphs.forEach(paragraph => {
+                    const words = paragraph.querySelectorAll('.word');
+                    
+                    words.forEach(word => {
+                        const wordText = word.textContent;
+                        const wordStart = charPosition;
+                        const wordEnd = charPosition + wordText.length;
+                        
+                        // Check if this word overlaps with any keyphrase to redact
+                        let shouldRedact = false;
+                        indices.forEach(([start, end]) => {
+                            // Check if word range overlaps with keyphrase range
+                            if (!(wordEnd <= start || wordStart >= end)) {
+                                shouldRedact = true;
+                            }
+                        });
+                        
+                        if (shouldRedact && !word.classList.contains('redacted')) {
+                            word.classList.add('redacted');
+                            // Trigger animation
+                            gsap.from(word, {
+                                scaleX: 0,
+                                duration: 0.4,
+                                ease: 'power2.out'
+                            });
+                        }
+                        
+                        charPosition += wordText.length;
+                        
+                        // Account for space after word
+                        if (word.nextSibling && word.nextSibling.nodeType === Node.TEXT_NODE) {
+                            charPosition += word.nextSibling.textContent.length;
+                        } else {
+                            charPosition += 1; // space between words
+                        }
+                    });
+                    
+                    // Account for paragraph breaks
+                    charPosition += 2; // \n\n between paragraphs
+                });
+            }
+
+            /**
+             * Progressively redacts text on collision events
+             * Redacts one more keyphrase each time it's called
+             */
+            function progressiveRedact() {
+                if (!redactionEnabled || redactedCount >= keyphraseIndices.length) {
+                    return;
+                }
+                
+                // Cooldown check: prevent rapid-fire redactions
+                const now = Date.now();
+                if (now - lastRedactionTime < REDACTION_COOLDOWN) {
+                    return; // Too soon, skip this redaction
+                }
+                lastRedactionTime = now;
+                
+                // Redact one more keyphrase
+                redactedCount++;
+                // Only pass the newly added keyphrase, not all previous ones
+                const newKeyphraseIndex = [keyphraseIndices[redactedCount - 1]];
+                
+                console.log(`Redacting ${redactedCount}/${keyphraseIndices.length} keyphrases`);
+                console.log(`Redacting indices:`, keyphraseIndices[redactedCount - 1]);
+                
+                // Apply redaction to the DOM (only the new one)
+                applyRedactionToDOM(newKeyphraseIndex);
             }
 
             // --- 3. Fallback Transformation Logic (if API fails) ---
@@ -430,6 +582,9 @@
                             // If this word is already animating, skip
                             if (w._isBouncing) return;
 
+                            // TRIGGER PROGRESSIVE REDACTION ON COLLISION
+                            progressiveRedact();
+
                             // We'll animate this word and a small clump around it (previous + next)
                             const neighbors = [w];
                             const clumpRadius = 1; // number of neighbor words on each side
@@ -536,7 +691,7 @@
 
 
             // --- 5. Function to Handle Content Change and Animation (GSAP) ---
-            function updateContent(mode, instant = false) {
+            async function updateContent(mode, instant = false) {
                 // Stop collision checks during content transition
                 if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
@@ -545,6 +700,21 @@
 
                 // Call the API to transform text using model.py
                 const transformedText = await transformTextWithAPI(rawInputText, mode);
+                
+                // Store the original transformed text for redaction
+                originalTransformedText = transformedText;
+
+                // Fetch keyphrases from the extraction API
+                keyphraseIndices = await fetchKeyphrases(transformedText);
+                redactedCount = 0;
+                redactionEnabled = keyphraseIndices.length > 0;
+                lastRedactionTime = 0; // Reset cooldown timer for new content
+                
+                if (redactionEnabled) {
+                    console.log(`Redaction enabled with ${keyphraseIndices.length} keyphrases`);
+                } else {
+                    console.log('No keyphrases found - redaction disabled');
+                }
 
                 // Use the new ParseInput function to prepare the HTML
                 const newContentHTML = ParseInput(transformedText);
