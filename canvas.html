@@ -185,11 +185,11 @@
             <label for="style-mode" class="text-lg font-semibold text-gray-700">Select Mode:</label>
             <select id="style-mode"
                 class="mode-select block w-full sm:w-64 p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500 text-base mode-select cursor-pointer">
-                <option value="corporate">💼 LinkedIn / Corporate Speak</option>
-                <option value="emoji">😂 Horrible Emojis Copypasta</option>
+                <option value="corporate">💼 LinkedIn Speak </option>
+                <option value="emoji">😂 Emoji Enhanced </option>
                 <option value="argumentative">⚔️ Argumentative Mode</option>
                 <option value="forgetful">🤔 Forgetful Mode</option>
-                <option value="brainrot">🤪 Brainrot / Slang</option>
+                <option value="brainrot">🤪 Brainrot </option>
             </select>
         </div>
 
@@ -212,8 +212,8 @@
             <p>Paste text on the home page to begin transformation.</p>
         </div>
 
-        <!-- Character Animation Layer -->
-        <div id="character-layer">
+        <!-- Character Animation Layer (hidden until text transform completes) -->
+        <div id="character-layer" style="opacity: 0; pointer-events: none;">
             <div id="char-1" class="character"
                 style="background-image: url('assets/match.png'); background-size: 140%; background-position: center; background-repeat: no-repeat; background-color: #a21f1f;">
             </div>
@@ -849,9 +849,16 @@
                 });
             }
 
-            function initialize() {
-                updateContent(modeSelect.value, true);
+            async function initialize() {
+                // Wait for the initial content transform to finish
+                await updateContent(modeSelect.value, true);
+
+                // Reveal the character layer once the LLM transform and DOM injection are complete
+                gsap.to(characterLayer, { opacity: 1, duration: 0.6, ease: 'power2.out' });
+
                 gsap.from(title, { opacity: 0, y: -20, duration: 1, ease: "power2.out" });
+
+                // Start character animations after revealing the layer
                 characters.forEach(animateCharacter);
             }
 
