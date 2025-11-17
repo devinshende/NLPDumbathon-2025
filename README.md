@@ -14,8 +14,17 @@ A text transformation and redaction application with NLP-powered keyphrase extra
 
 - Python 3.11+
 - Virtual environment (included in `dumb/`)
+- A Gemini API Key from your own account
 
 ### Installation
+
+### Pre setup
+Git clone repo. 
+Go to https://aistudio.google.com and go to Getting Started -> Dashboard -> API Keys -> Create API Key
+
+then paste your API Key into a file in the main folder called 'super_top_secret.txt'
+the file will just simply be the key. No quotes, nothing else, just something like
+`Aasfoiwjoeirjoias`
 
 1. **Activate your virtual environment**
 ```bash
